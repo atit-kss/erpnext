@@ -3,7 +3,6 @@
 
 
 import json
-
 import frappe
 import frappe.defaults
 from frappe import _, msgprint, qb
@@ -17,11 +16,13 @@ from frappe.model.utils.rename_doc import update_linked_doctypes
 from frappe.utils import cint, cstr, flt, get_formatted_email, today
 from frappe.utils.deprecations import deprecated
 from frappe.utils.user import get_users_with_role
+from gas_jobber.utils.terminal_utils import assign_custom_terminal
+from frappe.model.document import Document
+
 
 from erpnext.accounts.party import get_dashboard_info, validate_party_accounts
 from erpnext.controllers.website_list_for_contact import add_role_for_portal_user
 from erpnext.utilities.transaction_base import TransactionBase
-
 
 class Customer(TransactionBase):
 	# begin: auto-generated types
@@ -85,6 +86,20 @@ class Customer(TransactionBase):
 		territory: DF.Link | None
 		website: DF.Data | None
 	# end: auto-generated types
+
+	def after_insert(doc, method=None):
+		frappe.logger().info(f"[HOOK] Creating Mobile Access Mapping for {doc.name} ({doc.customer_type})")
+		if not frappe.db.exists("Mobile Access Mapping", {"customer": doc.name}):
+			frappe.get_doc({
+				"doctype": "Mobile Access Mapping",
+				"customer": doc.name,
+				"type": doc.customer_type or "Retail",
+				"users": []
+			}).insert(ignore_permissions=True)
+
+	def before_save(self):
+		# Update available terminal when preferred brand changes or saved
+		assign_custom_terminal(self)
 
 	def onload(self):
 		"""Load address and contacts in `__onload`"""
